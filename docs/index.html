@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f766e">
+<title>ESP32 IoT Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f4f6f5; --panel:#ffffff; --ink:#14201d; --muted:#5b6b66; --line:#dfe5e3;
+  --accent:#0f766e; --accent-ink:#ffffff; --ok:#15803d; --warn:#b45309; --bad:#b91c1c;
+  --chip:#e8f1ef; --radius:12px;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#0d1412; --panel:#151f1c; --ink:#e7efec; --muted:#93a59f; --line:#26332f;
+         --accent:#2dd4bf; --accent-ink:#06231f; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --chip:#1c2a26; }
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:15px}
+header{position:sticky;top:0;z-index:5;background:var(--panel);border-bottom:1px solid var(--line);padding:12px 16px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+h1{font-size:17px;margin:0;font-weight:600;letter-spacing:.2px}
+.sub{color:var(--muted);font-size:13px}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--muted);display:inline-block}
+.dot.on{background:var(--ok)}
+main{max-width:760px;margin:0 auto;padding:12px 16px 80px}
+button,select,input{font:inherit;color:inherit}
+button{border:1px solid var(--line);background:var(--panel);padding:9px 14px;border-radius:10px;cursor:pointer}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+button.danger{border-color:var(--bad);color:var(--bad)}
+button:disabled{opacity:.45;cursor:not-allowed}
+input,select{border:1px solid var(--line);background:var(--bg);padding:9px 10px;border-radius:10px;min-width:0}
+.tabs{display:flex;gap:4px;margin:12px 0;border-bottom:1px solid var(--line)}
+.tabs button{border:none;background:none;border-bottom:2px solid transparent;border-radius:0;padding:8px 12px;color:var(--muted)}
+.tabs button.active{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px}
+.card .k{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.6px}
+.card .v{font-family:"IBM Plex Mono",monospace;font-size:24px;margin-top:4px;word-break:break-word}
+.card .v small{font-size:13px;color:var(--muted);margin-left:3px}
+.wide{grid-column:1/-1}
+.section{margin:16px 0 8px;font-weight:600}
+.field{display:grid;grid-template-columns:1fr;gap:4px;margin-bottom:10px}
+.field label{font-size:13px;color:var(--muted)}
+.inline{display:flex;gap:8px}
+.inline input{flex:1}
+.pill{display:inline-block;padding:3px 9px;border-radius:999px;background:var(--chip);font-size:12px}
+.pill.ok{color:var(--ok)} .pill.bad{color:var(--bad)} .pill.warn{color:var(--warn)}
+.log{font-family:"IBM Plex Mono",monospace;font-size:12px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:10px;max-height:60vh;overflow:auto;white-space:pre-wrap}
+.log .e{color:var(--warn)} .log .x{color:var(--bad)} .log .a{color:var(--ok)}
+.toggle{display:flex;justify-content:space-between;align-items:center}
+.switch{width:52px;height:30px;border-radius:15px;background:var(--line);position:relative;border:none;padding:0}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:left .15s}
+.switch.on{background:var(--accent)} .switch.on::after{left:25px}
+.slots{display:flex;gap:10px}
+.slot{flex:1;border-radius:var(--radius);padding:18px 8px;text-align:center;font-weight:600;border:2px solid var(--ok);color:var(--ok)}
+.slot.busy{border-color:var(--bad);color:var(--bad)}
+.tank{height:160px;border:2px solid var(--line);border-radius:10px;position:relative;overflow:hidden;background:var(--bg)}
+.water{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(180deg,#38bdf8,#0369a1);transition:height .6s}
+.tank span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:600 28px "IBM Plex Mono",monospace;mix-blend-mode:difference;color:#fff}
+.banner{padding:10px 12px;border-radius:10px;margin:10px 0;border:1px solid var(--warn);color:var(--warn);background:var(--panel)}
+.hidden{display:none!important}
+footer{color:var(--muted);font-size:12px;text-align:center;margin-top:24px}
+a{color:var(--accent)}
+</style>
+</head>
+<body>
+<header>
+  <div class="row" style="justify-content:space-between">
+    <div>
+      <h1 id="title">ESP32 IoT Console</h1>
+      <div class="sub"><span class="dot" id="dot"></span> <span id="conn">Not connected</span></div>
+    </div>
+    <div class="row">
+      <button class="primary" id="btnConnect">Connect</button>
+      <button id="btnDisconnect" class="hidden">Disconnect</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div id="unsupported" class="banner hidden">
+    This browser can't use Bluetooth. On Android, open this page in <b>Chrome</b> (Bluetooth and Location on).
+    On iPhone, use the free <b>Bluefy</b> browser app. On a PC, use Chrome or Edge.
+  </div>
+
+  <div id="intro" class="card">
+    <div class="section" style="margin-top:0">How to use</div>
+    <ol style="margin:0;padding-left:20px;line-height:1.6">
+      <li>Power the ESP32 running one of the 10 projects.</li>
+      <li>Tap <b>Connect</b> and pick the device named <code>IOT-P0x-xxxx</code>.</li>
+      <li>Open <b>Setup</b>, enter the PIN (default <code>1234</code>), then your Wi-Fi and cloud keys.</li>
+      <li>Watch <b>Live</b> data and use <b>Control</b>. Every message is in <b>Log</b>.</li>
+    </ol>
+    <div class="field" style="margin-top:12px">
+      <label for="projSel">Preview a project layout without a device</label>
+      <select id="projSel"></select>
+    </div>
+  </div>
+
+  <nav class="tabs" id="tabs">
+    <button data-tab="live" class="active">Live</button>
+    <button data-tab="control">Control</button>
+    <button data-tab="setup">Setup</button>
+    <button data-tab="log">Log</button>
+  </nav>
+
+  <section id="tab-live"><div class="grid" id="live"></div></section>
+  <section id="tab-control" class="hidden"><div id="controls"></div></section>
+  <section id="tab-setup" class="hidden">
+    <div class="card">
+      <div class="section" style="margin-top:0">1. Unlock</div>
+      <div class="inline"><input id="pin" type="password" inputmode="numeric" placeholder="Device PIN (default 1234)"><button class="primary" data-act="auth">Unlock</button></div>
+      <div class="sub" style="margin-top:6px">Status: <span id="authState" class="pill">locked</span></div>
+    </div>
+    <div class="card" style="margin-top:10px">
+      <div class="section" style="margin-top:0">2. Wi-Fi</div>
+      <div class="field"><label>Network name (SSID, 2.4 GHz only)</label><input id="ssid" autocomplete="off"></div>
+      <div class="field"><label>Password</label><input id="wpass" type="password" autocomplete="off"></div>
+      <button class="primary" data-act="wifi">Save Wi-Fi</button>
+      <div class="sub" style="margin-top:6px" id="wifiState"></div>
+    </div>
+    <div class="card" style="margin-top:10px">
+      <div class="section" style="margin-top:0">3. Cloud keys &amp; settings</div>
+      <div id="settings"></div>
+    </div>
+    <div class="card row" style="margin-top:10px">
+      <button data-act="status">Refresh status</button>
+      <button data-act="reboot" class="danger">Reboot device</button>
+    </div>
+  </section>
+  <section id="tab-log" class="hidden">
+    <div class="row" style="margin-bottom:8px"><input id="raw" placeholder="Send a raw command, e.g. status" style="flex:1"><button data-act="raw">Send</button><button data-act="clearlog">Clear</button></div>
+    <div class="log" id="log"></div>
+  </section>
+
+  <footer>Web Bluetooth console for the ESP32 IoT Projects repo · Nordic UART service · no data leaves your phone except through the ESP32's own cloud uploads</footer>
+</main>
+
+<script>
+const NUS = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+const RX  = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+const TX  = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+
+/* ---------------------------------------------------------- project profiles
+   metrics:  [key, label, unit]       live cards from {"type":"data"} lines
+   controls: {label, cmd, input?, danger?}   buttons on the Control tab
+   settings: [key, label, placeholder, secret?]  saved with set:key=value     */
+const AIO = [['aiouser','Adafruit IO username',''],['aiokey','Adafruit IO key','aio_xxxx',1]];
+const SB  = [['sburl','Supabase project URL','https://xxxx.supabase.co'],['sbkey','Supabase publishable (anon) key','sb_publishable_...',1]];
+const TS  = [['tskey','ThingSpeak Write API Key','16 characters',1]];
+const P = {
+  P01:{name:'Smart Weather Station', cloud:'ThingSpeak',
+    metrics:[['t','Temperature','°C'],['h','Humidity','%'],['p','Pressure','hPa'],['l','Light','%'],['rn','Rain','%'],['hi','Heat index','°C'],['dp','Dew point','°C'],['fc','Forecast','',1]],
+    controls:[{label:'Read now',cmd:'read'},{label:'Upload now',cmd:'upload'}],
+    settings:[...TS,['tsint','Upload interval (s, ≥15)','20'],['rainthr','Rain threshold (%)','30']]},
+  P02:{name:'Smart Energy Monitor', cloud:'Adafruit IO',
+    metrics:[['v','Voltage','V'],['i','Current','A'],['w','Real power','W'],['va','Apparent','VA'],['pf','Power factor',''],['kwh','Energy','kWh'],['cost','Cost','₹'],['relay','Load relay','']],
+    controls:[{label:'Relay ON',cmd:'relay:on'},{label:'Relay OFF',cmd:'relay:off',danger:1},{label:'Reset kWh',cmd:'reset',danger:1},
+              {label:'Calibrate voltage',cmd:'calv',input:'Multimeter volts, e.g. 231'},{label:'Calibrate current',cmd:'cali',input:'Clamp meter amps, e.g. 0.42'}],
+    settings:[...AIO,['maxw','Overload limit (W)','1000'],['tariff','Tariff (₹/kWh)','7']]},
+  P03:{name:'Smart Home Automation', cloud:'Adafruit IO',
+    metrics:[['t','Temperature','°C'],['h','Humidity','%'],['m','Motion',''],['mode','Mode','',0],['alarm','Alarm','']],
+    relays:['Light','Fan','TV','Plug'],
+    controls:[{label:'AUTO',cmd:'mode:auto'},{label:'MANUAL',cmd:'mode:manual'},{label:'AWAY (security)',cmd:'mode:away'},{label:'Silence alarm',cmd:'alarm:off'},{label:'All OFF',cmd:'all:off',danger:1}],
+    settings:[...AIO,['lightto','Light off after no motion (s)','60'],['fanon','Fan ON above (°C)','30']]},
+  P04:{name:'Air Quality Monitor', cloud:'ThingSpeak',
+    metrics:[['ppm','CO₂-eq','ppm'],['cat','Air quality','',1],['t','Temperature','°C'],['h','Humidity','%'],['ratio','Rs/R0',''],['r0','R0','kΩ'],['alarm','Alarm','']],
+    controls:[{label:'Calibrate in clean outdoor air',cmd:'calibrate'},{label:'Mute alarm 10 min',cmd:'mute'}],
+    settings:[...TS,['alarmppm','Alarm level (ppm)','1500']]},
+  P05:{name:'Smart Parking System', cloud:'Supabase',
+    metrics:[['free','Free slots',''],['gate','Gate',''],['car','Car at gate','']], slots:true,
+    controls:[{label:'Open gate',cmd:'gate:open'},{label:'Close gate',cmd:'gate:close'},{label:'Re-sync cloud',cmd:'sync'}],
+    settings:[...SB,['occcm','Occupied if closer than (cm)','10']]},
+  P06:{name:'RFID Attendance System', cloud:'Supabase',
+    metrics:[['today','Scans since boot',''],['queued','Waiting to upload',''],['enrol','Enrol mode',''],['wifi','Wi-Fi','']], scans:true,
+    controls:[{label:'Enrol card',cmd:'enroll',input:'Member name'},{label:'Delete card',cmd:'delete',input:'Card UID, e.g. A1B2C3D4',danger:1},{label:'Cancel enrol',cmd:'cancel'},{label:'Sync now',cmd:'syncnow'}],
+    settings:[...SB]},
+  P07:{name:'Water Tank & Pump Controller', cloud:'Adafruit IO',
+    metrics:[['cm','Distance','cm'],['flow','Flow','L/min'],['lit','Pumped','L'],['pump','Pump',''],['mode','Mode',''],['fault','Fault','',1]], tank:true,
+    controls:[{label:'Pump ON',cmd:'pump:on'},{label:'Pump OFF',cmd:'pump:off',danger:1},{label:'AUTO',cmd:'mode:auto'},{label:'MANUAL',cmd:'mode:manual'},{label:'Clear fault',cmd:'clear'},{label:'Reset litres',cmd:'resetvol'}],
+    settings:[...AIO,['depth','Sensor to tank bottom (cm)','100'],['fullcm','Sensor to full line (cm)','15'],['low','Pump ON below (%)','25'],['high','Pump OFF at (%)','90'],['maxrun','Max run (min)','30']]},
+  P08:{name:'Health Monitoring System', cloud:'ThingSpeak',
+    metrics:[['hr','Heart rate','bpm'],['spo2','SpO₂','%'],['temp','Body temp','°C'],['finger','Finger on sensor',''],['alert','Alert',''],['msg','Alert detail','',1]],
+    controls:[],
+    settings:[...TS,['hrlow','HR low (bpm)','50'],['hrhigh','HR high (bpm)','120'],['spo2low','SpO₂ low (%)','92'],['temphigh','Temp high (°C)','38']]},
+  P09:{name:'Smart Greenhouse', cloud:'Supabase',
+    metrics:[['soil','Soil moisture','%'],['t','Temperature','°C'],['h','Humidity','%'],['l','Light','%'],['pump','Pump',''],['fan','Fan',''],['mode','Mode',''],['state','Watering','']],
+    controls:[{label:'AUTO',cmd:'mode:auto'},{label:'MANUAL',cmd:'mode:manual'},{label:'Pump ON',cmd:'pump:on'},{label:'Pump OFF',cmd:'pump:off'},{label:'Fan ON',cmd:'fan:on'},{label:'Fan OFF',cmd:'fan:off'},
+              {label:'Calibrate DRY (sensor in air)',cmd:'caldry'},{label:'Calibrate WET (sensor in water)',cmd:'calwet'}],
+    settings:[...SB,['soildry','Dry reading (mV)','2800'],['soilwet','Wet reading (mV)','1200']]},
+  P10:{name:'Vehicle Tracker & Accident Alert', cloud:'Supabase',
+    metrics:[['spd','Speed','km/h'],['sat','Satellites',''],['g','Peak g','g'],['pitch','Pitch','°'],['roll','Roll','°'],['state','State',''],['buf','Unsent points','']], map:true,
+    controls:[{label:'Clear alert',cmd:'reset'},{label:'Send SOS',cmd:'sos',danger:1},{label:'Set home geofence here',cmd:'fencehere',input:'Radius in metres, e.g. 300'}],
+    settings:[...SB,['crashg','Impact threshold (g)','2.5'],['tilt','Rollover angle (°)','60']]},
+};
+
+/* ---------------------------------------------------------- state */
+let dev=null, rxChr=null, txChr=null, profile=null, pid=null, last={}, buf='', authed=false;
+const $=s=>document.querySelector(s);
+const enc=new TextEncoder(), dec=new TextDecoder();
+
+function log(text,cls=''){
+  const el=$('#log'); const d=document.createElement('div');
+  d.className=cls; d.textContent=new Date().toLocaleTimeString()+'  '+text;
+  el.prepend(d); while(el.children.length>300) el.lastChild.remove();
+}
+
+function fmt(v){
+  if(v===null||v===undefined) return '—';
+  if(v===true) return 'YES'; if(v===false) return 'no';
+  return String(v);
+}
+
+/* ---------------------------------------------------------- rendering */
+function selectProfile(id){
+  pid=id; profile=P[id]; last={};
+  $('#title').textContent = profile ? `${id} · ${profile.name}` : 'ESP32 IoT Console';
+  if(!profile) return;
+  // controls
+  const c=$('#controls'); c.innerHTML='';
+  const box=document.createElement('div'); box.className='card';
+  box.innerHTML='<div class="section" style="margin-top:0">Commands</div><div class="sub" style="margin-bottom:8px">Unlock with your PIN on the Setup tab first.</div>';
+  const plain=document.createElement('div'); plain.className='row'; box.appendChild(plain);
+  profile.controls.forEach(ct=>{
+    if(ct.input){
+      const f=document.createElement('div'); f.className='field'; f.style.marginTop='12px';
+      f.innerHTML=`<label>${ct.label}</label><div class="inline"><input placeholder="${ct.input}"><button class="${ct.danger?'danger':''}">Send</button></div>`;
+      f.querySelector('button').onclick=()=>{ const v=f.querySelector('input').value.trim(); if(v) send(`${ct.cmd}:${v}`); };
+      box.appendChild(f);
+    } else {
+      const b=document.createElement('button'); b.textContent=ct.label; if(ct.danger) b.className='danger';
+      b.onclick=()=>send(ct.cmd); plain.appendChild(b);
+    }
+  });
+  if(!profile.controls.length) box.innerHTML+='<div class="sub">This project is read-only; adjust its alert limits on the Setup tab.</div>';
+  c.appendChild(box);
+  if(profile.relays){
+    const r=document.createElement('div'); r.className='card'; r.style.marginTop='10px';
+    r.innerHTML='<div class="section" style="margin-top:0">Switches</div>'+profile.relays.map((n,i)=>
+      `<div class="toggle" style="padding:8px 0"><span>${n}</span><button class="switch" id="sw${i}" aria-label="${n}"></button></div>`).join('');
+    c.appendChild(r);
+    profile.relays.forEach((n,i)=>$('#sw'+i).onclick=()=>send(`r${i+1}:toggle`));
+  }
+  // settings
+  const s=$('#settings'); s.innerHTML='';
+  profile.settings.forEach(([k,label,ph,secret])=>{
+    const f=document.createElement('div'); f.className='field';
+    f.innerHTML=`<label>${label} <span class="sub">(${k})</span></label><div class="inline"><input type="${secret?'password':'text'}" placeholder="${ph}" autocomplete="off"><button>Save</button></div>`;
+    f.querySelector('button').onclick=()=>{ const v=f.querySelector('input').value.trim(); if(v){ send(`set:${k}=${v}`); f.querySelector('input').value=''; } };
+    s.appendChild(f);
+  });
+  renderLive();
+}
+
+function renderLive(){
+  const g=$('#live'); if(!profile){ g.innerHTML=''; return; }
+  let h='';
+  if(profile.tank){ const p=last.lvl??0; h+=`<div class="card wide"><div class="k">Tank level</div><div class="tank"><div class="water" style="height:${p}%"></div><span>${last.lvl??'—'}%</span></div></div>`; }
+  if(profile.slots){ const s=last.s||[]; h+=`<div class="card wide"><div class="k">Parking slots</div><div class="slots" style="margin-top:8px">${(s.length?s:[0,0]).map((o,i)=>`<div class="slot ${o?'busy':''}">Slot ${i+1}<br>${o?'OCCUPIED':'FREE'}<br><small>${(last.d||[])[i]??'—'} cm</small></div>`).join('')}</div></div>`; }
+  if(profile.map){ h+= last.fix ? `<div class="card wide"><div class="k">Position</div><div class="v" style="font-size:16px">${last.lat}, ${last.lng}</div><a target="_blank" rel="noopener" href="https://maps.google.com/?q=${last.lat},${last.lng}">Open in Google Maps</a></div>`
+                                : `<div class="card wide"><div class="k">Position</div><div class="v" style="font-size:16px">Waiting for GPS fix (go outdoors)</div></div>`; }
+  profile.metrics.forEach(([k,label,unit,wide])=>{
+    h+=`<div class="card ${wide?'wide':''}"><div class="k">${label}</div><div class="v">${fmt(last[k])}${unit&&last[k]!=null?`<small>${unit}</small>`:''}</div></div>`;
+  });
+  g.innerHTML=h;
+  if(profile.relays && Array.isArray(last.r)) last.r.forEach((on,i)=>{ const b=$('#sw'+i); if(b) b.classList.toggle('on',!!on); });
+}
+
+/* ---------------------------------------------------------- BLE */
+function onLine(line){
+  let m; try{ m=JSON.parse(line); }catch{ log(line); return; }
+  switch(m.type){
+    case 'data':   last=m; renderLive(); break;
+    case 'status':
+      authed=!!m.auth; $('#authState').textContent=authed?'unlocked':'locked'; $('#authState').className='pill '+(authed?'ok':'');
+      $('#wifiState').textContent = m.wifi ? `Connected to ${m.ssid} · ${m.ip} · ${m.rssi} dBm` : (m.ssid?`Trying ${m.ssid}…`:'No Wi-Fi saved yet');
+      log(`status: wifi=${m.wifi} ssid=${m.ssid||'-'} heap=${m.heap} up=${m.up}s time=${m.time}`); break;
+    case 'ack':
+      if(m.cmd==='auth'){ authed=true; $('#authState').textContent='unlocked'; $('#authState').className='pill ok'; }
+      log(`✓ ${m.cmd}${m.msg?': '+m.msg:''}`,'a'); break;
+    case 'err':
+      if(m.cmd==='auth'){ authed=false; $('#authState').textContent='wrong PIN'; $('#authState').className='pill bad'; }
+      log(`✗ ${m.cmd}: ${m.msg||''}`,'x'); break;
+    case 'event':  log(`● ${m.name}: ${m.msg}`,'e'); notify(m); break;
+    case 'scan':   log(`▣ ${m.name} ${m.dir} (${m.uid})${m.cloud?'':' — queued offline'}`,'a'); break;
+    default: log(line);
+  }
+}
+
+function notify(m){
+  const urgent=['intrusion','overload','fault','air_alarm','vital_alert','accident_impact','accident_rollover','sos','countdown','rain_start','full'];
+  if(urgent.includes(m.name) && 'vibrate' in navigator) navigator.vibrate([200,100,200]);
+}
+
+async function send(cmd){
+  if(!rxChr){ log('not connected','x'); return; }
+  try{ await rxChr.writeValueWithResponse(enc.encode(cmd+'\n')); log('→ '+cmd.replace(/(pass|key)=.*/,'$1=****').replace(/^wifi:([^,]*),.*/,'wifi:$1,****')); }
+  catch(e){ log('write failed: '+e.message,'x'); }
+}
+
+async function connect(){
+  try{
+    dev = await navigator.bluetooth.requestDevice({ filters:[{namePrefix:'IOT-'},{services:[NUS]}], optionalServices:[NUS] });
+    dev.addEventListener('gattserverdisconnected', onDisconnected);
+    $('#conn').textContent='Connecting…';
+    const server = await dev.gatt.connect();
+    const svc = await server.getPrimaryService(NUS);
+    rxChr = await svc.getCharacteristic(RX);
+    txChr = await svc.getCharacteristic(TX);
+    await txChr.startNotifications();
+    txChr.addEventListener('characteristicvaluechanged', e=>{
+      buf += dec.decode(e.target.value);
+      let i; while((i=buf.indexOf('\n'))>=0){ const line=buf.slice(0,i).trim(); buf=buf.slice(i+1); if(line) onLine(line); }
+      if(buf.length>4000) buf='';
+    });
+    const id=(dev.name||'').split('-')[1];
+    selectProfile(P[id]?id:'P01');
+    $('#projSel').value=pid;
+    $('#intro').classList.add('hidden');
+    $('#dot').classList.add('on'); $('#conn').textContent=dev.name||'Connected';
+    $('#btnConnect').classList.add('hidden'); $('#btnDisconnect').classList.remove('hidden');
+    log('connected to '+dev.name,'a');
+    setTimeout(()=>send('status'),400);
+  }catch(e){ if(e.name!=='NotFoundError') log('connect failed: '+e.message,'x'); $('#conn').textContent='Not connected'; }
+}
+
+function onDisconnected(){
+  rxChr=txChr=null; authed=false;
+  $('#dot').classList.remove('on'); $('#conn').textContent='Disconnected — tap Connect';
+  $('#btnConnect').classList.remove('hidden'); $('#btnDisconnect').classList.add('hidden');
+  $('#authState').textContent='locked'; $('#authState').className='pill';
+  log('disconnected','x');
+}
+
+/* ---------------------------------------------------------- wiring */
+$('#btnConnect').onclick=connect;
+$('#btnDisconnect').onclick=()=>dev&&dev.gatt.connected&&dev.gatt.disconnect();
+document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#tabs button').forEach(x=>x.classList.toggle('active',x===b));
+  ['live','control','setup','log'].forEach(t=>$('#tab-'+t).classList.toggle('hidden',t!==b.dataset.tab));
+});
+document.addEventListener('click',e=>{
+  const a=e.target.dataset&&e.target.dataset.act; if(!a) return;
+  if(a==='auth'){ const p=$('#pin').value.trim(); if(p) send('auth:'+p); }
+  if(a==='wifi'){ const s=$('#ssid').value.trim(), p=$('#wpass').value; if(s){ send(`wifi:${s},${p}`); $('#wpass').value=''; setTimeout(()=>send('status'),8000);} }
+  if(a==='status') send('status');
+  if(a==='reboot' && confirm('Reboot the device?')) send('reboot');
+  if(a==='raw'){ const r=$('#raw').value.trim(); if(r){ send(r); $('#raw').value=''; } }
+  if(a==='clearlog') $('#log').innerHTML='';
+});
+const sel=$('#projSel');
+Object.keys(P).forEach(k=>{ const o=document.createElement('option'); o.value=k; o.textContent=`${k} · ${P[k].name} (${P[k].cloud})`; sel.appendChild(o); });
+sel.onchange=()=>selectProfile(sel.value);
+const qp=new URLSearchParams(location.search).get('p');
+selectProfile(P[qp]?qp:'P01'); sel.value=pid;
+if(!navigator.bluetooth){ $('#unsupported').classList.remove('hidden'); $('#btnConnect').disabled=true; }
+</script>
+</body>
+</html>

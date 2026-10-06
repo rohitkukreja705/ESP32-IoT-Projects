@@ -1,0 +1,71 @@
+name: Build firmware
+
+# Builds all 10 ESP32 projects in the cloud and publishes ready-to-flash
+# images (flash *.merged.bin at address 0x0 with https://espressif.github.io/esptool-js/).
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sketch:
+          - P01_Smart_Weather_Station
+          - P02_Smart_Energy_Monitor
+          - P03_Smart_Home_Automation
+          - P04_Air_Quality_Monitor
+          - P05_Smart_Parking_System
+          - P06_RFID_Attendance_System
+          - P07_Water_Tank_Pump_Controller
+          - P08_Health_Monitoring_System
+          - P09_Smart_Greenhouse
+          - P10_Vehicle_Tracker_Accident_Alert
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: arduino/setup-arduino-cli@v2
+
+      - name: Cache Arduino data
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.arduino15
+            ~/Arduino/libraries
+          key: arduino-esp32-3.3.12-libs-v1
+
+      - name: Install ESP32 core and libraries
+        run: |
+          arduino-cli config init --overwrite
+          arduino-cli config add board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32@3.3.12
+          arduino-cli lib install \
+            "NimBLE-Arduino@2.5.1" "ArduinoJson@7.4.2" "PubSubClient@2.8" \
+            "DHT sensor library" "Adafruit Unified Sensor" "Adafruit BMP085 Library" \
+            "Adafruit SSD1306" "Adafruit GFX Library" "LiquidCrystal I2C" "MFRC522" \
+            "ESP32Servo" "SparkFun MAX3010x Pulse and Proximity Sensor Library" \
+            "OneWire" "DallasTemperature" "TinyGPSPlus" "Adafruit MPU6050"
+
+      - name: Sync shared headers
+        run: cp common/IoTCore.h common/Cloud.h ${{ matrix.sketch }}/
+
+      - name: Compile
+        run: |
+          arduino-cli compile \
+            --fqbn esp32:esp32:esp32:PartitionScheme=min_spiffs \
+            --output-dir build/${{ matrix.sketch }} \
+            ${{ matrix.sketch }}
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ matrix.sketch }}
+          path: |
+            build/${{ matrix.sketch }}/*.merged.bin
+            build/${{ matrix.sketch }}/*.ino.bin
+          if-no-files-found: error
